@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WebSocket Chat</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        text-align: center;
+        background-color: #f4f4f4;
+        margin: 0;
+        padding: 0;
+      }
+      #chat {
+        display: none;
+      }
+      #messages {
+        margin: 20px auto;
+        width: 60%;
+        height: 500px;
+        overflow-y: auto;
+        border: 1px solid #ddd;
+        padding: 10px;
+        background: #fff;
+        border-radius: 5px;
+      }
+      .message {
+        display: flex;
+        margin: 5px 0;
+        padding: 8px;
+        border-radius: 10px;
+        max-width: 70%;
+      }
+      .my-message {
+        background-color: #007bff;
+        color: white;
+        align-self: flex-end;
+        margin-left: auto;
+      }
+      .other-message {
+        background-color: #8b4513;
+        color: white;
+        align-self: flex-start;
+        margin-right: auto;
+      }
+      .message-container {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+      }
+      #message {
+        width: 56%;
+        padding: 8px;
+        margin-top: 10px;
+        border: 1px solid #ccc;
+        border-radius: 5px;
+        height: 30px;
+      }
+      button {
+        padding: 8px 12px;
+        border: none;
+        background-color: #007bff;
+        color: white;
+        cursor: pointer;
+        border-radius: 5px;
+      }
+      button:hover {
+        background-color: #0056b3;
+      }
+      .send {
+        height: 45px;
+        width: 70px;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>Secure Chat Rooms</h2>
+
+    <div id="auth">
+      <input type="text" id="roomName" placeholder="Enter room name" />
+      <input type="text" id="roomKey" placeholder="Enter or create room key" />
+      <button onclick="authenticate()">Join Chat</button>
+    </div>
+
+    <div id="chat">
+      <h3 id="roomTitle"></h3>
+      <div id="messages"></div>
+      <input type="text" id="message" placeholder="Type a message" />
+      <button class="send" onclick="sendMessage()">Send</button>
+    </div>
+
+    <script>
+      let ws;
+      let userName = prompt("Enter your name:");
+      let roomKey = "";
+      let roomName = "";
+
+      function authenticate() {
+        roomName = document.getElementById("roomName").value;
+        roomKey = document.getElementById("roomKey").value;
+
+        if (!roomName.trim() || !roomKey.trim()) {
+          alert("Please enter a room name and key.");
+          return;
+        }
+
+        ws = new WebSocket("ws://localhost:4000");
+
+        ws.onopen = () => {
+          ws.send(
+            JSON.stringify({ type: "auth", key: roomKey, name: roomName })
+          );
+        };
+
+        ws.onmessage = (event) => {
+          const data = JSON.parse(event.data);
+
+          if (data.type === "auth" || data.type === "success") {
+            alert(data.message);
+            document.getElementById("auth").style.display = "none";
+            document.getElementById("chat").style.display = "block";
+            document.getElementById(
+              "roomTitle"
+            ).innerText = `Room: ${roomName}`;
+
+            loadChatHistory();
+          } else if (data.type === "history") {
+            data.messages.forEach((msg) =>
+              appendMessage(msg.user, msg.message)
+            );
+          } else if (data.type === "chat") {
+            appendMessage(data.user, data.message);
+            saveMessageToHistory(data.user, data.message);
+          }
+        };
+      }
+
+      function sendMessage() {
+        const message = document.getElementById("message").value;
+        if (ws && message.trim() !== "") {
+          ws.send(
+            JSON.stringify({
+              type: "message",
+              user: userName,
+              message: message,
+            })
+          );
+          document.getElementById("message").value = "";
+        }
+      }
+
+      function appendMessage(user, message) {
+        const messageDiv = document.getElementById("messages");
+        const messageContainer = document.createElement("div");
+        messageContainer.classList.add("message-container");
+
+        const messageElement = document.createElement("div");
+        messageElement.classList.add("message");
+        messageElement.classList.add(
+          user === userName ? "my-message" : "other-message"
+        );
+        messageElement.innerHTML = `<strong>${user}:</strong> ${message}`;
+
+        messageContainer.appendChild(messageElement);
+        messageDiv.appendChild(messageContainer);
+        messageDiv.scrollTop = messageDiv.scrollHeight;
+      }
+
+      function saveMessageToHistory(user, message) {
+        sessionStorage.setItem(
+          roomKey,
+          JSON.stringify([
+            ...JSON.parse(sessionStorage.getItem(roomKey) || "[]"),
+            { user, message },
+          ])
+        );
+      }
+
+      function loadChatHistory() {
+        const history = JSON.parse(sessionStorage.getItem(roomKey) || "[]");
+        history.forEach((msg) => appendMessage(msg.user, msg.message));
+      }
+    </script>
+  </body>
+</html>
